@@ -18,6 +18,7 @@ const start = async (indexName) => {
       console.log('Elastic search is running.');
     }
   });
+  
   try {
     await client.indices.create({index: indexName});
     console.log('created index');

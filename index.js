@@ -12,10 +12,13 @@ const fileName = "shopper_actions3.csv";
 var url = "mongodb+srv://sahad:sahad@cluster0.i3c1r.mongodb.net/CustomersLogDb?retryWrites=true&w=majority";
 mongoose.connect(url,{useNewurlParser:true,useUnifiedTopology:true}).then((result)=>console.log("connected to db"));
 
-
 const app = express();
 const PORT = process.env.PORT || 5000;
 app.use(express.json());
+app.listen(PORT, () => console.log(`Server listening in port ${PORT}`))
+
+
+
 app.get('/',(req,res)=>{
     res.send('Welcome to my Shopalyst Api  ');
 });
@@ -63,7 +66,12 @@ app.post('/addtoEdb',(req,res)=>{
                 "parent_org":req.body.parent_org
             }
         }, function(err, resp, status) {
-            res.send(resp)
+            if(err){
+                res.send("Something went wrong,please checkk els connection ")
+            }else{
+                res.send(resp)
+
+            }
         });
     }else{
         res.status(400).send("IndexName is required")
@@ -137,7 +145,7 @@ app.get('/searchbySession',(req,res)=>{
 
 
 // post single schema to mongo and els
-app.post('/addShopperlog',async (req,res)=>{
+app.post('/addShopperlog', (req,res)=>{
 
     if(req.body.indexName){
         const post = new shoppersSchema({
@@ -158,8 +166,8 @@ app.post('/addShopperlog',async (req,res)=>{
         });
         
         try{
-            post.save().then(()=>{
-                res.send(post);
+            post.save().then(()=>{  
+                // res.send(post);
             })
     
             elasticclient.index({
@@ -180,10 +188,18 @@ app.post('/addShopperlog',async (req,res)=>{
                     "aff_content":req.body.aff_content,
                     "parent_org":req.body.parent_org
                 }
+            }, function(err, resp, status) {
+                if(err){
+                    console.log("Something went wrong")
+                }else{
+                    res.send(resp)
+                    // console.log(resp)
+    
+                }
             });
             
         }catch(err){
-            res.status(500).send(error);
+            res.status(500).send(err);
         }
     }else{
         res.status(400).send("Index Name is required")
@@ -216,20 +232,8 @@ app.get("/getbySession",async (req,res)=>{
                     parent_org: req.body.brand
                 }
              },
-             {$group : {_id : "$shopper_id", totalNumber : {$sum : 1}}}
-            //  {
-            //     "$group" : {
-            //         "_id" : "$_id",
-            //         "shopperid":{
-            //         "$first" : "$shopper_id"
-
-            //         },
-                  
-            //         "Count" : {
-            //             "$sum" : 1
-            //         }
-            //     }
-            // }
+              {$group : {_id : "$shopper_id", totalNumber : {$sum : 1}}}
+           
           
          ],
        ).then(function(docs){
@@ -292,7 +296,7 @@ app.get("/delete", async (request, response) => {
 
 
 ///load data to db on mongo
-app.get('/load',async(req,res)=>{
+app.post('/loadToM',async(req,res)=>{
     csvtojson().fromFile(fileName).then(source => {
         console.log(source.length);
         var logs = []
@@ -346,20 +350,6 @@ app.get('/load',async(req,res)=>{
     });
 });
 
-//delete all from Els
-app.get("/deleteOnEls", async (request, response) => {
-    if(request.body.indexName){
-        deleteIndex(request.body.indexName).then(function(result){
-            return response.status( 200 ).send(result);
-        })
-    }else{
-        console.log("IndexName is required")
-        response.status(400).send("IndexName is required")
-    }
-
-});
-
-
 //add all to elastic 
 app.post('/loadCsvToEdb',async(req,res)=>
 {
@@ -372,7 +362,20 @@ app.post('/loadCsvToEdb',async(req,res)=>
     }
 }
 );
-app.listen(PORT, () => console.log(`Server listening in port ${PORT}`))
+
+
+//delete all from Els
+app.get("/deleteOnEls", async (request, response) => {
+    if(request.body.indexName){
+        deleteIndex(request.body.indexName).then(function(result){
+            return response.status( 200 ).send(result);
+        })
+    }else{
+        console.log("IndexName is required")
+        response.status(400).send("IndexName is required")
+    }
+
+});
 
 
 //get a single data by id
@@ -393,3 +396,92 @@ app.get('/getbyId',(req,res)=>{
         console.trace(err.message);
     });
 })
+
+
+
+// app.post('/upload', async function(req, res) {
+
+//   var file = JSON.parse(JSON.stringify(req.files))
+//   var file_name = file.file.name
+//   //if you want just the buffer format you can use it
+//   var buffer = new Buffer.from(file.file.data.data)
+//   //uncomment await if you want to do stuff after the file is created
+//   /*await*/
+
+//   fs.writeFile(file_name, buffer, async(err) => {
+//     console.log("Successfully Written to File.");
+//     // do what you want with the file it is in (__dirname + "/" + file_name)
+//     console.log("end  :  " + new Date())
+//     console.log(result_stt + "")
+//     fs.unlink(__dirname + "/" + file_name, () => {})
+//     res.send(result_stt)
+//   });
+
+// });
+
+///load data to db on mongo
+app.post('/load',async(req,res)=>{
+
+    if(req.body.indexName){
+        csvtojson().fromFile(fileName).then(source => {
+            console.log(source.length);
+            var logs = []
+            for (var i = 0; i < source.length; i++) {
+                var action = source[i]["action"],
+                time_stamp = source[i]["time_stamp"],
+                campaign_id = source[i]["campaign_id"],
+                publisher_id = source[i]["publisher_id"],
+                product_id = source[i]["product_id"],
+                shopper_id = source[i]["shopper_id"],
+                hashed_ip = source[i]["hashed_ip"],
+                user_agent = source[i]["user_agent"],
+                aff_source = source[i]["aff_source"],
+                aff_medium = source[i]["aff_medium"],
+                aff_term = source[i]["aff_term"],
+                aff_campaign = source[i]["aff_campaign"],
+                aff_content = source[i]["aff_content"],
+                parent_org = source[i]["parent_org"]
+        
+                const post = new shoppersSchema({
+                    time_stamp:time_stamp,
+                    action:action,
+                    campaign_id:campaign_id,
+                    publisher_id:publisher_id,
+                    product_id:product_id,
+                    shopper_id:shopper_id ,
+                    hashed_ip:hashed_ip,
+                    user_agent:user_agent,
+                    aff_source:aff_source,
+                    aff_medium:aff_medium,
+                    aff_term:aff_term,
+                    aff_campaign:aff_campaign,
+                    aff_content:aff_content,
+                    parent_org:parent_org
+                });
+    
+                logs.push(post) 
+            }
+    
+    
+            shoppersSchema.insertMany(logs).
+            then(function(docs){
+                console.log("successfully pushed all items");
+                res.send(
+                    "All items stored into database successfully "+logs.length +logs[1]);
+            }).
+            catch(function(err){
+                res.err(500);
+            });
+    
+        });
+
+        start(req.body.indexName).then(function(result){
+            console.log("Inserted successfully to ELS")
+        })
+
+    }else{
+        res.status(400).send("indexName is required")
+    }
+
+  
+});
